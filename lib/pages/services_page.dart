@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-//import '../widgets.dart';
 import 'appointments_page.dart';
 import 'prescriptions_page.dart';
 import 'lab_investigations_page.dart';
@@ -10,7 +9,8 @@ import 'government_hospitals_page.dart';
 import 'health_records_page.dart';
 import 'medical_history_page.dart';
 import 'dependents_page.dart';
-import 'visit_details_page.dart'; // route demo if needed
+import 'visit_details_page.dart';
+import 'private_hospitals_page.dart';
 
 class ServicesPage extends StatelessWidget {
   const ServicesPage({super.key});
@@ -19,13 +19,13 @@ class ServicesPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return CustomScrollView(
       slivers: [
-        // Sticky hospital selection box (مصغّر لتفادي الـ overflow)
+        // ✅ هيدر المستشفيات ثابت
         SliverPersistentHeader(
           pinned: true,
-          delegate: _StickyHeader(child: _HospitalHeader()),
+          delegate: _StickyHeader(child: const _HospitalHeader()),
         ),
 
-        // قائمة الخدمات بنمط كروت صغيرة مع وصف
+        // ✅ قائمة الخدمات (كروت مع وصف)
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           sliver: SliverList(
@@ -120,11 +120,8 @@ class ServicesPage extends StatelessWidget {
                   MaterialPageRoute(builder: (_) => const BloodDonationPage()),
                 ),
               ),
-
-              // 🔴 أيقونة طوارئ واضحة بالأحمر
               _ServiceTile(
-                icon: Icons
-                    .emergency_outlined, // بديل: Icons.priority_high_rounded
+                icon: Icons.emergency_outlined,
                 title: 'Emergency Info',
                 subtitle: 'Critical medical information for emergencies',
                 iconColor: Colors.red,
@@ -141,15 +138,16 @@ class ServicesPage extends StatelessWidget {
   }
 }
 
-/// --------------------
+/// ========================
 ///  Sticky Hospital Header
-/// --------------------
+/// ========================
 class _HospitalHeader extends StatelessWidget {
+  const _HospitalHeader();
+
   @override
   Widget build(BuildContext context) {
-    final blue = Theme.of(context).colorScheme.primary;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       color: Colors.white,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -170,6 +168,14 @@ class _HospitalHeader extends StatelessWidget {
                 label: "Private Hospitals",
                 icon: Icons.apartment,
                 textColor: Colors.blue.shade700,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PrivateHospitalsPage(),
+                    ),
+                  );
+                },
               ),
             ),
             const SizedBox(width: 12),
@@ -188,7 +194,7 @@ class _HospitalHeader extends StatelessWidget {
               ),
             ),
           ]),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Divider(height: 0, color: Colors.grey.withOpacity(.25)),
         ],
       ),
@@ -218,14 +224,16 @@ class _HospitalBox extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14), // أصغر
+          padding:
+              const EdgeInsets.symmetric(vertical: 12), // صغير لتفادي overflow
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: Colors.white, size: 26),
+              Icon(icon, color: Colors.white, size: 24),
               const SizedBox(height: 6),
               Text(
                 label,
+                textAlign: TextAlign.center,
                 style: TextStyle(color: textColor, fontWeight: FontWeight.w700),
               ),
             ],
@@ -236,29 +244,33 @@ class _HospitalBox extends StatelessWidget {
   }
 }
 
+/// يجعل الهيدر مثبت مع ارتفاع ثابت (لا يتقلّص) — لا Overflow
 class _StickyHeader extends SliverPersistentHeaderDelegate {
   final Widget child;
   _StickyHeader({required this.child});
 
   @override
-  Widget build(BuildContext ctx, double shrinkOffset, bool overlapsContent) =>
-      child;
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Colors.white, // حتى لا يظهر المحتوى من خلفه أثناء التمرير
+      child: child,
+    );
+    // ملاحظة: لا نستخدم SafeArea هنا لأن الصفحة نفسها داخل Scaffold لديه SafeArea.
+  }
 
-  // تقليل الارتفاع لتفادي BOTTOM OVERFLOWED
   @override
-  double get maxExtent => 110;
-
+  double get maxExtent => 134; // ارتفاع ثابت مناسب
   @override
-  double get minExtent => 110;
-
+  double get minExtent => 134; // نفس الارتفاع لمنع الانكماش
   @override
   bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) =>
       false;
 }
 
-/// --------------------
-///  كارت خدمة صغير مع وصف (مثل الصورة)
-/// --------------------
+/// ========================
+///  Service Tile (card + subtitle)
+/// ========================
 class _ServiceTile extends StatelessWidget {
   const _ServiceTile({
     required this.icon,
@@ -286,7 +298,7 @@ class _ServiceTile extends StatelessWidget {
       child: ListTile(
         onTap: onTap,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 10), // أصغر
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         leading: Container(
           width: 44,
           height: 44,
@@ -306,9 +318,7 @@ class _ServiceTile extends StatelessWidget {
           padding: const EdgeInsets.only(top: 4),
           child: Text(
             subtitle,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.black54,
-            ),
+            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.black54),
           ),
         ),
         horizontalTitleGap: 14,
