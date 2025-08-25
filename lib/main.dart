@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app_shell.dart';
 import 'pages/emergency_info_page.dart';
+import 'pages/login_page.dart'; // ← صفحة تسجيل الدخول (UI فقط)
 
 void main() => runApp(const HealthApp());
 
@@ -24,21 +25,22 @@ class HealthApp extends StatelessWidget {
       theme: theme,
       darkTheme: ThemeData.dark(useMaterial3: true),
 
-      // الشاشة الرئيسية للتطبيق
-      home: const AppShell(),
+      // ✅ ابدأ بصفحة تسجيل الدخول
+      home: const LoginPage(),
 
-      // مسارات مسماة جاهزة للـ pushNamed وللاستخدام مع QR
+      // ✅ مسارات مسماة
       routes: {
+        '/home': (_) => const AppShell(), // بعد التحقق
         '/emergency': (_) => const EmergencyInfoPage(),
       },
 
-      // دعم روابط مخصصة مثل healthapp://emergency (لو فعّلت URL scheme)
+      // ✅ دعم روابط مخصصة مثل: healthapp://emergency
       onGenerateRoute: (settings) {
         final name = settings.name ?? '';
         if (name == 'healthapp://emergency') {
           return MaterialPageRoute(builder: (_) => const EmergencyInfoPage());
         }
-        return null; // استخدم السلوك الافتراضي لباقي المسارات
+        return null; // باقي المسارات الافتراضية
       },
 
       debugShowCheckedModeBanner: false,
