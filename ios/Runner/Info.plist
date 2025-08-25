@@ -45,5 +45,38 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- ======= الإضافات المهمة للاتصال بالباك-إند المحلي ======= -->
+
+	<!-- السماح بالـ HTTP أثناء التطوير (استعمل HTTPS عند الإطلاق) -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+
+	<!-- إذن الشبكة المحلية حتى يتصل التطبيق بسيرفر الكمبيوتر على نفس شبكة الـ Wi-Fi -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app needs local network access to connect to the backend running on your Wi-Fi.</string>
+
+	<!-- (اختياري) إعلان خدمة Bonjour للعثور على السيرفر داخل الشبكة -->
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_http._tcp</string>
+	</array>
+
+	<!-- تفعيل مخطط الروابط healthapp://emergency -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.example.healthapp</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>healthapp</string>
+			</array>
+		</dict>
+	</array>
+
 </dict>
 </plist>
