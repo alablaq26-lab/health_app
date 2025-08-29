@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:health_app/pages/somepage.dart';
 // import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_shell.dart';
@@ -44,6 +45,7 @@ class HealthApp extends StatelessWidget {
       routes: {
         '/home': (_) => const AppShell(),
         '/emergency': (_) => const EmergencyInfoPage(),
+        '/dashboard': (_) => const SomePage(),
       },
 
       onGenerateRoute: (settings) {
