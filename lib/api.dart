@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 /// غيّر هذا إلى IP جهاز اللابتوب + المنفذ 8000
 /// مثال: http://192.168.1.23:8000
-const String baseUrl = 'http://127.0.0.1:8000/';
+const String baseUrl = 'http://192.168.1.9:8000/';
 
 class Api {
   static Uri _u(String path) => Uri.parse('$baseUrl$path');
