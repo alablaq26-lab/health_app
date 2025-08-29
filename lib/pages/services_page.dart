@@ -127,7 +127,9 @@ class ServicesPage extends StatelessWidget {
                 iconColor: Colors.red,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const EmergencyInfoPage()),
+                  MaterialPageRoute(
+                    builder: (_) => EmergencyInfoPage(nationalId: '15509324'),
+                  ),
                 ),
               ),
             ]),
