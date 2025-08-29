@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../api.dart'; // نستخدم Api.postJson
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -11,9 +11,6 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // غيّر الـ IP هنا إلى IP جهازك + منفذ Django
-  static const String baseUrl = 'http://192.168.1.9:8000';
-
   final _idController = TextEditingController();
   final _otpController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -32,66 +29,60 @@ class _LoginPageState extends State<LoginPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      final res = await http.post(
-        Uri.parse('$baseUrl/auth/request-otp/'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'national_id': _idController.text.trim()}),
-      );
-      if (res.statusCode == 200) {
-        setState(() => _otpSent = true);
+      final body = {'national_id': _idController.text.trim()};
+      debugPrint('REQUEST OTP: $body');
+
+      await Api.postJson('/auth/request-otp/', body);
+
+      setState(() => _otpSent = true);
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content:
-                  Text('تم إرسال رمز التحقق (راجع كونسول السيرفر حالياً).')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فشل الإرسال: ${res.body}')),
+              content: Text('OTP sent. Check server console for now.')),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ في الاتصال: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send OTP: $e')),
+        );
+      }
     } finally {
       setState(() => _loading = false);
     }
   }
 
   Future<void> _verifyOtp() async {
-    if (_otpController.text.trim().isEmpty) {
+    final code = _otpController.text.trim();
+    if (code.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('أدخل رمز التحقق')),
+        const SnackBar(content: Text('Enter the verification code')),
       );
       return;
     }
+
     setState(() => _loading = true);
     try {
-      final res = await http.post(
-        Uri.parse('$baseUrl/auth/verify-otp/'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'national_id': _idController.text.trim(),
-          'code': _otpController.text.trim(),
-        }),
-      );
-      if (res.statusCode == 200) {
-        // حفظ حالة الدخول لفتح التطبيق مباشرة في المرات القادمة
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('logged_in', true);
+      final body = {
+        'national_id': _idController.text.trim(),
+        'code': code,
+      };
+      debugPrint('VERIFY OTP: $body');
 
-        if (!mounted) return;
-        // غيّر الوجهة هنا لو صفحتك الرئيسية غير '/'
-        Navigator.of(context).pushReplacementNamed('/');
-      } else {
+      await Api.postJson('/auth/verify-otp/', body);
+
+      // ✅ اعتبرنا النجاح status 200 بدون حاجة لقراءة محتوى الرد
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('logged_in', true); // يبقى المستخدم مسجلاً
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacementNamed('/home'); // انتقل للرئيسية
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فشل التحقق: ${res.body}')),
+          SnackBar(content: Text('Verification failed: $e')),
         );
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ في الاتصال: $e')),
-      );
     } finally {
       setState(() => _loading = false);
     }
@@ -113,46 +104,53 @@ class _LoginPageState extends State<LoginPage> {
               children: [
                 const SizedBox(height: 48),
                 Text(
-                  "تسجيل الدخول",
-                  style: theme.textTheme.headlineMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  'Sign in',
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "أدخل الرقم المدني وسيصلك رمز تحقق",
+                  'Enter your National ID. We will send a verification code to your phone.',
                   style: theme.textTheme.bodyMedium
                       ?.copyWith(color: Colors.black54),
                 ),
                 const SizedBox(height: 24),
+
+                // National ID
                 TextFormField(
                   controller: _idController,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: "الرقم المدني",
+                    labelText: 'National ID',
                     prefixIcon: Icon(Icons.badge_outlined),
                     border: OutlineInputBorder(),
                   ),
                   validator: (v) {
                     final t = v?.trim() ?? '';
-                    if (t.isEmpty) return 'أدخل الرقم المدني';
-                    if (t.length < 6) return 'الرقم المدني قصير';
+                    if (t.isEmpty) return 'Enter your National ID';
+                    if (t.length < 6) return 'National ID seems too short';
                     return null;
                   },
-                  enabled: !_otpSent, // بعد إرسال OTP نقفل تعديل الرقم
+                  enabled: !_otpSent, // بعد إرسال OTP نمنع تغيير الرقم
                 ),
                 const SizedBox(height: 16),
+
+                // OTP
                 if (_otpSent) ...[
                   TextFormField(
                     controller: _otpController,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                      labelText: "رمز التحقق",
+                      labelText: 'Verification Code',
                       prefixIcon: Icon(Icons.lock_outline),
                       border: OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 16),
                 ],
+
+                // Button
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
@@ -165,20 +163,23 @@ class _LoginPageState extends State<LoginPage> {
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : Text(!_otpSent ? "إرسال الرمز" : "تحقق ودخول"),
+                        : Text(!_otpSent ? 'Send Code' : 'Verify & Login'),
                   ),
                 ),
+
                 if (_otpSent) ...[
                   const SizedBox(height: 12),
                   TextButton.icon(
                     onPressed: _loading
                         ? null
                         : () {
-                            setState(() => _otpSent = false);
-                            _otpController.clear();
+                            setState(() {
+                              _otpSent = false;
+                              _otpController.clear();
+                            });
                           },
                     icon: const Icon(Icons.edit),
-                    label: const Text('تعديل الرقم المدني'),
+                    label: const Text('Edit National ID'),
                   ),
                 ],
               ],
