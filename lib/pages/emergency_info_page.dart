@@ -2,56 +2,34 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// عدّل المسار لو مختلف عندك
+// ⬇️ عدّل المسار لو كان مختلف عندك
 import '../widgets/emergency_qr_card.dart';
 
+/// Emergency page that shows: Blood Type, Chronic Conditions, Allergies,
+/// and Current Medications. Reads data from Supabase.
 class EmergencyInfoPage extends StatelessWidget {
   const EmergencyInfoPage({super.key, required this.nationalId});
 
+  /// The citizen national ID to look up.
   final String nationalId;
 
   SupabaseClient get _sb => Supabase.instance.client;
 
-  // ---------------- Data ----------------
-
-  Future<_EmergencyDto?> _load() async {
-    final row = await _sb
-        .from('create_user_patient')
-        .select('full_name, gender, dob, blood_group, allergies')
-        .eq('national_id', nationalId)
-        .limit(1)
-        .maybeSingle();
-
-    if (row == null) return null;
-
-    String? _s(String? v) => (v == null || v.trim().isEmpty) ? null : v.trim();
-
-    return _EmergencyDto(
-      fullName: _s(row['full_name'] as String?),
-      bloodGroup: _s(row['blood_group'] as String?),
-      allergies: _s(row['allergies'] as String?),
-      chronicConditions: null, // لا يوجد حقل مخصص حالياً
-      medications: const <String>[], // لا يوجد جدول أدوية حالياً
-    );
+  // ========= بناء النص اللي يندمج داخل QR =========
+  String _buildQrPayload(_EmergencyDto d) {
+    // نص بسيط يبدأ بحروف (عشان الكاميرا ما تعتبره رقم هاتف)
+    return '''
+EMERGENCY INFO
+National ID: $nationalId
+Blood Type: ${d.bloodGroup ?? 'None'}
+Allergies: ${d.allergies ?? 'None'}
+Conditions: ${d.chronicConditions ?? 'None'}
+Medications: ${d.medications == null || d.medications!.isEmpty ? 'None' : d.medications!.join(', ')}
+''';
   }
 
-  /// نص مختصر مناسب للكاميرا (بدون هاتف)
-  /// مثال: Blood:A- | Allergies:None | Chronic:None | Meds:None
-  String _summaryTextFrom(_EmergencyDto d) {
-    final blood = (d.bloodGroup?.isNotEmpty == true) ? d.bloodGroup! : 'None';
-    final allergy = (d.allergies?.isNotEmpty == true) ? d.allergies! : 'None';
-    final chronic = (d.chronicConditions?.isNotEmpty == true)
-        ? d.chronicConditions!
-        : 'None';
-    final meds = (d.medications != null && d.medications!.isNotEmpty)
-        ? d.medications!.join('+')
-        : 'None';
-    return 'Blood:$blood | Allergies:$allergy | Chronic:$chronic | Meds:$meds';
-  }
-
-  // ---------------- QR Bottom Sheet ----------------
-
-  void _showQrSheet(BuildContext context, {required String qrText}) {
+  /// Show the QR in a bottom sheet (responsive size)
+  void _showQrSheet(BuildContext context, String qrData) {
     final w = MediaQuery.of(context).size.width;
     final size = math.min(280.0, w * 0.72);
 
@@ -64,19 +42,51 @@ class EmergencyInfoPage extends StatelessWidget {
       ),
       builder: (_) => Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        child: EmergencyQrCard(
-          // يمكن تمرير نص عادي هنا، ليس شرطًا أن يكون URL
-          emergencyLink: qrText,
-          title: 'Emergency QR (Offline)',
-          subtitle: 'Scan to view summary (no internet required)',
-          size: size,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            EmergencyQrCard(
+              emergencyLink: qrData, // النص البسيط
+              title: 'Emergency QR (Offline)',
+              subtitle: 'Scan to view emergency summary (no internet required)',
+              size: size,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tip: Keep the data short so the QR is easy to scan.',
+              style: Theme.of(context).textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  // ---------------- UI ----------------
+  // ========= Data Loading =========
+  Future<_EmergencyDto?> _load() async {
+    // Try to get from create_user_patient by national_id
+    final resp = await _sb
+        .from('create_user_patient')
+        .select('full_name, gender, dob, blood_group, allergies')
+        .eq('national_id', nationalId)
+        .limit(1)
+        .maybeSingle();
 
+    if (resp == null) return null;
+
+    String? _s(String? v) => (v == null || v.trim().isEmpty) ? null : v.trim();
+
+    return _EmergencyDto(
+      fullName: _s(resp['full_name'] as String?),
+      bloodGroup: _s(resp['blood_group'] as String?),
+      allergies: _s(resp['allergies'] as String?),
+      chronicConditions: null, // لا يوجد حقل مخصّص حالياً
+      medications: const [], // لا يوجد جدول أدوية حالياً
+    );
+  }
+
+  // ========= UI =========
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -108,22 +118,12 @@ class EmergencyInfoPage extends StatelessWidget {
             return Center(child: Text('No data found for ID: $nationalId'));
           }
 
-          final qrShortText = _summaryTextFrom(data);
+          final payload = _buildQrPayload(data);
 
           return SafeArea(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
               children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                    icon: const Icon(Icons.qr_code_2),
-                    label: const Text('Show Emergency QR'),
-                    onPressed: () => _showQrSheet(context, qrText: qrShortText),
-                  ),
-                ),
-                const SizedBox(height: 8),
-
                 // ---- VITALS ----
                 Text(
                   'Vitals',
@@ -172,6 +172,16 @@ class EmergencyInfoPage extends StatelessWidget {
                   _medRow(context, name: 'None')
                 else
                   ...data.medications!.map((m) => _medRow(context, name: m)),
+
+                const SizedBox(height: 24),
+
+                Center(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.qr_code_2),
+                    label: const Text('Show Emergency QR'),
+                    onPressed: () => _showQrSheet(context, payload),
+                  ),
+                ),
 
                 const SizedBox(height: 16),
 
@@ -222,7 +232,7 @@ class EmergencyInfoPage extends StatelessWidget {
     );
   }
 
-  // ---------- helpers ----------
+  // ---------- UI helpers ----------
   Widget _vitalRow(
     BuildContext context, {
     required IconData icon,
