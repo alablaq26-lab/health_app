@@ -1,20 +1,12 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// ⬇️ عدّل المسار لو كان مختلف عندك
+import '../widgets/emergency_qr_card.dart';
+
 /// Emergency page that shows: Blood Type, Chronic Conditions, Allergies,
-/// and Current Medications.
-/// - Reads from Supabase table: user_patient
-/// - Uses: blood_group (for Blood Type)
-/// - Allergies/Conditions/Medications are shown as "None" when not available.
-///
-/// NOTE: Make sure Supabase is initialized somewhere once in your app, e.g.:
-/// (keep this as a comment if you already initialized it)
-///
-/// // await Supabase.initialize(
-/// //   url: 'https://YOUR-PROJECT-ref.supabase.co',
-/// //   anonKey: 'YOUR-ANON-KEY',
-/// // );
-///
+/// and Current Medications. Reads data from Supabase.
 class EmergencyInfoPage extends StatelessWidget {
   const EmergencyInfoPage({super.key, required this.nationalId});
 
@@ -23,32 +15,82 @@ class EmergencyInfoPage extends StatelessWidget {
 
   SupabaseClient get _sb => Supabase.instance.client;
 
+  // ========= بناء النص اللي يندمج داخل QR =========
+  String _buildQrPayload(_EmergencyDto d) {
+    // نص بسيط يبدأ بحروف (عشان الكاميرا ما تعتبره رقم هاتف)
+    return '''
+EMERGENCY INFO
+National ID: $nationalId
+Blood Type: ${d.bloodGroup ?? 'None'}
+Allergies: ${d.allergies ?? 'None'}
+Conditions: ${d.chronicConditions ?? 'None'}
+Medications: ${d.medications == null || d.medications!.isEmpty ? 'None' : d.medications!.join(', ')}
+''';
+  }
+
+  /// Show the QR in a bottom sheet (responsive size)
+  void _showQrSheet(BuildContext context, String qrData) {
+    final w = MediaQuery.of(context).size.width;
+    final size = math.min(280.0, w * 0.72);
+
+    showModalBottomSheet(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            EmergencyQrCard(
+              emergencyLink: qrData, // النص البسيط
+              title: 'Emergency QR (Offline)',
+              subtitle: 'Scan to view emergency summary (no internet required)',
+              size: size,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tip: Keep the data short so the QR is easy to scan.',
+              style: Theme.of(context).textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ========= Data Loading =========
   Future<_EmergencyDto?> _load() async {
-    // 1) Try to get from user_patient by national_id
+    // Try to get from create_user_patient by national_id
     final resp = await _sb
         .from('create_user_patient')
-        .select('full_name, gender, dob, blood_group')
-        .eq('national_id', nationalId.trim())
+        .select('full_name, gender, dob, blood_group, allergies')
+        .eq('national_id', nationalId)
         .limit(1)
         .maybeSingle();
 
     if (resp == null) return null;
 
-    // Map what we have. Missing fields will be "None" in the UI.
-    final bloodGroup = (resp['blood_group'] as String?)?.trim();
+    String? _s(String? v) => (v == null || v.trim().isEmpty) ? null : v.trim();
+
     return _EmergencyDto(
-      fullName: (resp['full_name'] as String?)?.trim(),
-      bloodGroup:
-          (bloodGroup == null || bloodGroup.isEmpty) ? null : bloodGroup,
-      allergies: null, // Not available in user_patient → will show "None"
-      chronicConditions: null, // Not available → "None"
-      medications: const [], // Not available → "None"
+      fullName: _s(resp['full_name'] as String?),
+      bloodGroup: _s(resp['blood_group'] as String?),
+      allergies: _s(resp['allergies'] as String?),
+      chronicConditions: null, // لا يوجد حقل مخصّص حالياً
+      medications: const [], // لا يوجد جدول أدوية حالياً
     );
   }
 
+  // ========= UI =========
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         leading: const BackButton(),
@@ -73,10 +115,10 @@ class EmergencyInfoPage extends StatelessWidget {
           }
           final data = snap.data;
           if (data == null) {
-            return Center(
-              child: Text('No data found for ID: $nationalId'),
-            );
+            return Center(child: Text('No data found for ID: $nationalId'));
           }
+
+          final payload = _buildQrPayload(data);
 
           return SafeArea(
             child: ListView(
@@ -129,9 +171,17 @@ class EmergencyInfoPage extends StatelessWidget {
                 if (data.medications == null || data.medications!.isEmpty)
                   _medRow(context, name: 'None')
                 else
-                  ...data.medications!.map(
-                    (m) => _medRow(context, name: m),
+                  ...data.medications!.map((m) => _medRow(context, name: m)),
+
+                const SizedBox(height: 24),
+
+                Center(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.qr_code_2),
+                    label: const Text('Show Emergency QR'),
+                    onPressed: () => _showQrSheet(context, payload),
                   ),
+                ),
 
                 const SizedBox(height: 16),
 
@@ -183,7 +233,6 @@ class EmergencyInfoPage extends StatelessWidget {
   }
 
   // ---------- UI helpers ----------
-
   Widget _vitalRow(
     BuildContext context, {
     required IconData icon,
