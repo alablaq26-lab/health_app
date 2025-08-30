@@ -1,179 +1,241 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// تعرض بيانات الطوارئ للمستخدم بناءً على national_id من Supabase.
-class EmergencyInfoPage extends StatefulWidget {
-  final String nationalId;
+/// Emergency page that shows: Blood Type, Chronic Conditions, Allergies,
+/// and Current Medications.
+/// - Reads from Supabase table: user_patient
+/// - Uses: blood_group (for Blood Type)
+/// - Allergies/Conditions/Medications are shown as "None" when not available.
+///
+/// NOTE: Make sure Supabase is initialized somewhere once in your app, e.g.:
+/// (keep this as a comment if you already initialized it)
+///
+/// // await Supabase.initialize(
+/// //   url: 'https://YOUR-PROJECT-ref.supabase.co',
+/// //   anonKey: 'YOUR-ANON-KEY',
+/// // );
+///
+class EmergencyInfoPage extends StatelessWidget {
   const EmergencyInfoPage({super.key, required this.nationalId});
 
-  @override
-  State<EmergencyInfoPage> createState() => _EmergencyInfoPageState();
-}
+  /// The citizen national ID to look up.
+  final String nationalId;
 
-class _EmergencyInfoPageState extends State<EmergencyInfoPage> {
-  Map<String, dynamic>? row; // بيانات من create_user_patient
-  bool loading = true;
-  String? errorMsg;
+  SupabaseClient get _sb => Supabase.instance.client;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetch();
+  Future<_EmergencyDto?> _load() async {
+    // 1) Try to get from user_patient by national_id
+    final resp = await _sb
+        .from('create_user_patient')
+        .select('full_name, gender, dob, blood_group')
+        .eq('national_id', nationalId.trim())
+        .limit(1)
+        .maybeSingle();
+
+    if (resp == null) return null;
+
+    // Map what we have. Missing fields will be "None" in the UI.
+    final bloodGroup = (resp['blood_group'] as String?)?.trim();
+    return _EmergencyDto(
+      fullName: (resp['full_name'] as String?)?.trim(),
+      bloodGroup:
+          (bloodGroup == null || bloodGroup.isEmpty) ? null : bloodGroup,
+      allergies: null, // Not available in user_patient → will show "None"
+      chronicConditions: null, // Not available → "None"
+      medications: const [], // Not available → "None"
+    );
   }
-
-  Future<void> _fetch() async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      /// ✨ غيّر اسم الجدول/الأعمدة لو كانت مختلفة عندك.
-      final data = await supabase
-          .from('create_user_patient')
-          .select()
-          .eq('national_id', widget.nationalId)
-          .maybeSingle();
-
-      if (!mounted) return;
-      setState(() {
-        row = data; // قد تكون null لو ما لقي
-        loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        errorMsg = 'Failed to load data: $e';
-        loading = false;
-      });
-    }
-  }
-
-  String _v(dynamic v) =>
-      (v == null || (v is String && v.trim().isEmpty)) ? '—' : v.toString();
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    if (loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (errorMsg != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Emergency Access')),
-        body: Center(child: Text(errorMsg!)),
-      );
-    }
-    if (row == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Emergency Access')),
-        body: Center(
-          child: Text('No data found for ID: ${widget.nationalId}'),
-        ),
-      );
-    }
-
-    final name = _v(row!['full_name']);
-    final dob = _v(row!['dob']);
-    final gender = _v(row!['gender']);
-    final blood = _v(row!['blood_group']);
-
-    // إبقِ هذه كروت مرتبة وقابلة للتبديل لاحقًا (أدوية مزمنة/حساسيات… الخ)
     return Scaffold(
       appBar: AppBar(
+        leading: const BackButton(),
         title: const Text('Emergency Access'),
-        actions: [
-          // لاحقًا ممكن تضيف زر QR أو مشاركة
-        ],
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
-            Text('Patient',
-                style: theme.textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            _row(theme, 'Name', name),
-            _row(theme, 'National ID', widget.nationalId),
-            _row(theme, 'DOB', dob),
-            _row(theme, 'Gender', gender),
-            _row(theme, 'Blood Type', blood),
+      body: FutureBuilder<_EmergencyDto?>(
+        future: _load(),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Failed to load data.\n${snap.error}',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
+          final data = snap.data;
+          if (data == null) {
+            return Center(
+              child: Text('No data found for ID: $nationalId'),
+            );
+          }
 
-            const SizedBox(height: 16),
-            const Divider(height: 24),
+          return SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+              children: [
+                // ---- VITALS ----
+                Text(
+                  'Vitals',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _vitalRow(
+                  context,
+                  icon: Icons.bloodtype_outlined,
+                  iconColor: const Color(0xFFEB5757),
+                  label: 'Blood Type',
+                  value: data.bloodGroup ?? 'None',
+                ),
+                _vitalRow(
+                  context,
+                  icon: Icons.stacked_line_chart,
+                  iconColor: const Color(0xFF2F80ED),
+                  label: 'Chronic Conditions',
+                  value: data.chronicConditions ?? 'None',
+                ),
+                _vitalRow(
+                  context,
+                  icon: Icons.medical_services_outlined,
+                  iconColor: const Color(0xFFF2C94C),
+                  label: 'Allergies',
+                  value: (data.allergies == null || data.allergies!.isEmpty)
+                      ? 'None'
+                      : data.allergies!,
+                ),
 
-            // أمثلة لأقسام ثابتة مؤقتًا — اربطها لاحقًا بجدول آخر (مثلاً create_user_hospital)
-            Text('Current Medications',
-                style: theme.textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            _bullet(theme, 'Metformin (daily)'),
-            _bullet(theme, 'Aspirin (daily)'),
+                const SizedBox(height: 16),
+                const Divider(),
 
-            const SizedBox(height: 16),
-            _warning(theme),
-          ],
-        ),
+                // ---- CURRENT MEDS ----
+                const SizedBox(height: 8),
+                Text(
+                  'Current Medications',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (data.medications == null || data.medications!.isEmpty)
+                  _medRow(context, name: 'None')
+                else
+                  ...data.medications!.map(
+                    (m) => _medRow(context, name: m),
+                  ),
+
+                const SizedBox(height: 16),
+
+                // ---- WARNING CARD ----
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(.06),
+                    border: Border.all(color: Colors.red.withOpacity(.25)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.error_outline,
+                          color: Colors.red.shade600, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Emergency Information',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: Colors.red.shade700,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "This information is critical for emergency medical care.\nPlease ensure it's always up to date.",
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: Colors.red.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _row(ThemeData theme, String label, String value) {
+  // ---------- UI helpers ----------
+
+  Widget _vitalRow(
+    BuildContext context, {
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String value,
+  }) {
+    final textStyle = Theme.of(context).textTheme.bodyMedium;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 20),
+          const SizedBox(width: 12),
+          Expanded(child: Text(label, style: textStyle)),
+          Text(
+            value,
+            style: textStyle?.copyWith(fontWeight: FontWeight.w600),
+            textAlign: TextAlign.right,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _medRow(BuildContext context, {required String name, String? note}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
-          Text(value,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-
-  Widget _bullet(ThemeData theme, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
           Icon(Icons.check_circle, color: Colors.green.shade600, size: 20),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
-        ],
-      ),
-    );
-  }
-
-  Widget _warning(ThemeData theme) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.red.withOpacity(.06),
-        border: Border.all(color: Colors.red.withOpacity(.25)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.error_outline, color: Colors.red.shade600, size: 20),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text('Emergency Information',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.red.shade700,
-                      fontWeight: FontWeight.w700,
-                    )),
-                const SizedBox(height: 4),
                 Text(
-                  "This information is critical for emergency medical care.\nPlease ensure it's always up to date.",
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: Colors.red.shade700),
+                  name,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
+                if (note != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    note,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: Colors.black54),
+                  ),
+                ],
               ],
             ),
           ),
@@ -181,4 +243,20 @@ class _EmergencyInfoPageState extends State<EmergencyInfoPage> {
       ),
     );
   }
+}
+
+class _EmergencyDto {
+  _EmergencyDto({
+    this.fullName,
+    this.bloodGroup,
+    this.allergies,
+    this.chronicConditions,
+    this.medications,
+  });
+
+  final String? fullName;
+  final String? bloodGroup;
+  final String? allergies;
+  final String? chronicConditions;
+  final List<String>? medications;
 }
