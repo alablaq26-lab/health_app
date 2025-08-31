@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../api.dart'; // نستخدم Api.postJson
+import '../api.dart'; // Api.postJson
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -29,23 +29,17 @@ class _LoginPageState extends State<LoginPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      final body = {'national_id': _idController.text.trim()};
-      debugPrint('REQUEST OTP: $body');
-
-      await Api.postJson('/auth/request-otp/', body);
-
+      final nid = _idController.text.trim();
+      await Api.postJson('/auth/request-otp/', {'national_id': nid});
       setState(() => _otpSent = true);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('OTP sent. Check server console for now.')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('OTP sent.')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send OTP: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to send OTP: $e')));
       }
     } finally {
       setState(() => _loading = false);
@@ -63,25 +57,22 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() => _loading = true);
     try {
-      final body = {
-        'national_id': _idController.text.trim(),
+      final nid = _idController.text.trim();
+      await Api.postJson('/auth/verify-otp/', {
+        'national_id': nid,
         'code': code,
-      };
-      debugPrint('VERIFY OTP: $body');
+      });
 
-      await Api.postJson('/auth/verify-otp/', body);
-
-      // ✅ اعتبرنا النجاح status 200 بدون حاجة لقراءة محتوى الرد
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('logged_in', true); // يبقى المستخدم مسجلاً
+      await prefs.setBool('logged_in', true);
+      await prefs.setString('national_id', nid); // نحفظ هوية المستخدم
 
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed('/home'); // انتقل للرئيسية
+      Navigator.of(context).pushReplacementNamed('/home');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Verification failed: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Verification failed: $e')));
       }
     } finally {
       setState(() => _loading = false);
@@ -103,12 +94,9 @@ class _LoginPageState extends State<LoginPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 48),
-                Text(
-                  'Sign in',
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text('Sign in',
+                    style: theme.textTheme.headlineMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Text(
                   'Enter your National ID. We will send a verification code to your phone.',
@@ -116,8 +104,6 @@ class _LoginPageState extends State<LoginPage> {
                       ?.copyWith(color: Colors.black54),
                 ),
                 const SizedBox(height: 24),
-
-                // National ID
                 TextFormField(
                   controller: _idController,
                   keyboardType: TextInputType.number,
@@ -132,11 +118,9 @@ class _LoginPageState extends State<LoginPage> {
                     if (t.length < 6) return 'National ID seems too short';
                     return null;
                   },
-                  enabled: !_otpSent, // بعد إرسال OTP نمنع تغيير الرقم
+                  enabled: !_otpSent,
                 ),
                 const SizedBox(height: 16),
-
-                // OTP
                 if (_otpSent) ...[
                   TextFormField(
                     controller: _otpController,
@@ -149,8 +133,6 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 16),
                 ],
-
-                // Button
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
@@ -161,12 +143,10 @@ class _LoginPageState extends State<LoginPage> {
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                            child: CircularProgressIndicator(strokeWidth: 2))
                         : Text(!_otpSent ? 'Send Code' : 'Verify & Login'),
                   ),
                 ),
-
                 if (_otpSent) ...[
                   const SizedBox(height: 12),
                   TextButton.icon(

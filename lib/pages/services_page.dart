@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'appointments_page.dart';
 import 'prescriptions_page.dart';
 import 'lab_investigations_page.dart';
@@ -15,17 +17,56 @@ import 'private_hospitals_page.dart';
 class ServicesPage extends StatelessWidget {
   const ServicesPage({super.key});
 
+  Future<void> _openEmergency(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    var nid = prefs.getString('national_id');
+
+    // لو مافيه رقم محفوظ نطلبه من المستخدم ونحفظه
+    if (nid == null || nid.trim().isEmpty) {
+      nid = await showDialog<String>(
+        context: context,
+        builder: (ctx) {
+          final c = TextEditingController();
+          return AlertDialog(
+            title: const Text('Enter National ID'),
+            content: TextField(
+              controller: c,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'National ID',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx, c.text.trim()),
+                  child: const Text('Continue')),
+            ],
+          );
+        },
+      );
+      if (nid == null || nid.isEmpty) return;
+      await prefs.setString('national_id', nid);
+    }
+
+    if (!context.mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => EmergencyInfoPage(nationalId: nid!)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return CustomScrollView(
       slivers: [
-        // ✅ هيدر المستشفيات ثابت
         SliverPersistentHeader(
           pinned: true,
-          delegate: _StickyHeader(child: const _HospitalHeader()),
+          delegate: _StickyHeader(child: _HospitalHeader()),
         ),
-
-        // ✅ قائمة الخدمات (كروت مع وصف)
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           sliver: SliverList(
@@ -125,12 +166,7 @@ class ServicesPage extends StatelessWidget {
                 title: 'Emergency Info',
                 subtitle: 'Critical medical information for emergencies',
                 iconColor: Colors.red,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => EmergencyInfoPage(nationalId: '15509324'),
-                  ),
-                ),
+                onTap: () => _openEmergency(context), // ← هنا التغيير
               ),
             ]),
           ),
@@ -140,12 +176,7 @@ class ServicesPage extends StatelessWidget {
   }
 }
 
-/// ========================
-///  Sticky Hospital Header
-/// ========================
 class _HospitalHeader extends StatelessWidget {
-  const _HospitalHeader();
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -172,11 +203,9 @@ class _HospitalHeader extends StatelessWidget {
                 textColor: Colors.blue.shade700,
                 onTap: () {
                   Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const PrivateHospitalsPage(),
-                    ),
-                  );
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const PrivateHospitalsPage()));
                 },
               ),
             ),
@@ -188,10 +217,9 @@ class _HospitalHeader extends StatelessWidget {
                 textColor: Colors.blue.shade700,
                 onTap: () {
                   Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const GovernmentHospitalsPage()),
-                  );
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const GovernmentHospitalsPage()));
                 },
               ),
             ),
@@ -226,18 +254,16 @@ class _HospitalBox extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(vertical: 12), // صغير لتفادي overflow
+          padding: const EdgeInsets.symmetric(vertical: 14),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: Colors.white, size: 24),
+              Icon(icon, color: Colors.white, size: 26),
               const SizedBox(height: 6),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: textColor, fontWeight: FontWeight.w700),
-              ),
+              Text(label,
+                  textAlign: TextAlign.center,
+                  style:
+                      TextStyle(color: textColor, fontWeight: FontWeight.w700)),
             ],
           ),
         ),
@@ -246,33 +272,24 @@ class _HospitalBox extends StatelessWidget {
   }
 }
 
-/// يجعل الهيدر مثبت مع ارتفاع ثابت (لا يتقلّص) — لا Overflow
 class _StickyHeader extends SliverPersistentHeaderDelegate {
   final Widget child;
   _StickyHeader({required this.child});
 
   @override
-  Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: Colors.white, // حتى لا يظهر المحتوى من خلفه أثناء التمرير
-      child: child,
-    );
-    // ملاحظة: لا نستخدم SafeArea هنا لأن الصفحة نفسها داخل Scaffold لديه SafeArea.
-  }
+  Widget build(BuildContext ctx, double shrinkOffset, bool overlapsContent) =>
+      child;
 
   @override
-  double get maxExtent => 134; // ارتفاع ثابت مناسب
+  double get maxExtent => 140;
   @override
-  double get minExtent => 134; // نفس الارتفاع لمنع الانكماش
+  double get minExtent => 140;
+
   @override
   bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) =>
       false;
 }
 
-/// ========================
-///  Service Tile (card + subtitle)
-/// ========================
 class _ServiceTile extends StatelessWidget {
   const _ServiceTile({
     required this.icon,
@@ -305,23 +322,18 @@ class _ServiceTile extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: color.withOpacity(.08),
-            borderRadius: BorderRadius.circular(10),
-          ),
+              color: color.withOpacity(.08),
+              borderRadius: BorderRadius.circular(10)),
           child: Icon(icon, size: 26, color: color),
         ),
-        title: Text(
-          title,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        title: Text(title,
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700)),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            subtitle,
-            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.black54),
-          ),
+          child: Text(subtitle,
+              style:
+                  theme.textTheme.bodyMedium?.copyWith(color: Colors.black54)),
         ),
         horizontalTitleGap: 14,
         minLeadingWidth: 0,
