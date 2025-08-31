@@ -68,7 +68,8 @@ class _LoginPageState extends State<LoginPage> {
       await prefs.setString('national_id', nid); // نحفظ هوية المستخدم
 
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed('/home');
+      Navigator.of(context).pushReplacementNamed('/home',
+          arguments: {'nid': _idController.text.trim()});
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)

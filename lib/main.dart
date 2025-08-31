@@ -5,7 +5,7 @@ import 'app_shell.dart';
 import 'pages/login_page.dart';
 import 'pages/emergency_info_page.dart';
 
-/// ضع مفاتيح Supabase هنا 👇 (من Project Settings > API)
+/// مفاتيح Supabase (من Project Settings > API)
 const String kSupabaseUrl = 'https://zeebbduwxilnvjdzdzfs.supabase.co';
 const String kSupabaseAnonKey =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InplZWJiZHV3eGlsbnZqZHpkemZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2MzExNTAsImV4cCI6MjA3MTIwNzE1MH0.-4qj3EjO45soQNM1o31Ixsdq9aXxTBc0NMPRL6wdZZI';
@@ -41,20 +41,14 @@ class HealthApp extends StatelessWidget {
       theme: theme,
       darkTheme: ThemeData.dark(useMaterial3: true),
 
-      /// ابدأ بصفحة الدخول (بدّلها لاحقًا لو حبيت)
+      /// نبدأ بصفحة تسجيل الدخول
       home: const LoginPage(),
 
-      routes: {
-        '/home': (_) => const AppShell(),
-      },
-
-      /// دعم deep-link:
-      /// - healthapp://emergency?nid=66142020
-      /// - أو دفع route يدويًا: /emergency مع arguments: {'nid': '...'}
+      /// كل التنقّلات الديناميكية (ومرور nationalId) هنا
       onGenerateRoute: (settings) {
         final name = settings.name ?? '';
 
-        // 1) لو جاي عبر deep-link healthapp://emergency?nid=...
+// deep link: healthapp://emergency?nid=...
         if (name.startsWith('healthapp://emergency')) {
           final uri = Uri.parse(name);
           final nid = uri.queryParameters['nid'];
@@ -63,7 +57,6 @@ class HealthApp extends StatelessWidget {
               builder: (_) => EmergencyInfoPage(nationalId: nid),
             );
           }
-          // بدون nid نعرض رسالة بسيطة
           return MaterialPageRoute(
             builder: (_) => const Scaffold(
               body: Center(child: Text('Missing national_id in deep link')),
@@ -71,7 +64,7 @@ class HealthApp extends StatelessWidget {
           );
         }
 
-        // 2) مسار داخلي اختياري: /emergency مع تمرير arguments: {'nid': '...'}
+// route داخلي: /emergency مع arguments: {'nid': '...'}
         if (name == '/emergency') {
           final args = (settings.arguments ?? {}) as Map?;
           final nid = args?['nid']?.toString();
@@ -87,7 +80,23 @@ class HealthApp extends StatelessWidget {
           );
         }
 
-        return null; // استخدم routes العادية
+// ✅ الصفحة الرئيسية: نتوقع تمرير national id كـ arguments
+        if (name == '/home') {
+          final args = (settings.arguments ?? {}) as Map?;
+          final nid = args?['nid']?.toString();
+          if (nid != null && nid.isNotEmpty) {
+            return MaterialPageRoute(
+              builder: (_) => AppShell(nationalId: nid),
+            );
+          }
+          return MaterialPageRoute(
+            builder: (_) => const Scaffold(
+              body: Center(child: Text('Missing national_id for /home')),
+            ),
+          );
+        }
+
+        return null; // استخدم هذا للسماح بالمسارات الافتراضية إن وُجدت
       },
 
       debugShowCheckedModeBanner: false,

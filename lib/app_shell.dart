@@ -4,7 +4,11 @@ import 'pages/services_page.dart';
 import 'pages/settings_page.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({super.key, required this.nationalId});
+
+  /// رقم الهوية المُسجّل دخول به
+  final String nationalId;
+
   @override
   State<AppShell> createState() => _AppShellState();
 }
@@ -14,7 +18,12 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [const ProfilePage(), const ServicesPage()];
+// مرّر الـ nationalId إلى صفحة البروفايل
+    final pages = [
+      ProfilePage(nationalId: widget.nationalId),
+      const ServicesPage(),
+    ];
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_index == 0 ? "Home" : "Services"),
@@ -31,9 +40,13 @@ class _AppShellState extends State<AppShell> {
         selectedIndex: _index,
         destinations: const [
           NavigationDestination(
-              icon: Icon(Icons.person_outline), label: "Profile"),
+            icon: Icon(Icons.person_outline),
+            label: "Profile",
+          ),
           NavigationDestination(
-              icon: Icon(Icons.grid_view_outlined), label: "Services"),
+            icon: Icon(Icons.grid_view_outlined),
+            label: "Services",
+          ),
         ],
         onDestinationSelected: (i) => setState(() => _index = i),
       ),
