@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:health_app/widgets/emergency_qr_card.dart';
+import 'package:healthkey/widgets/emergency_qr_card.dart';
 
 class SomePage extends StatelessWidget {
   const SomePage({super.key});
