@@ -279,7 +279,7 @@ class ProfilePage extends StatelessWidget {
           (Icons.straighten, '${(patient.height ?? 0).toStringAsFixed(0)} cm'),
           (Icons.bloodtype_outlined, (patient.bloodGroup ?? '—')),
           (Icons.cake_outlined, age == null ? '—' : '${age}Y'),
-          (Icons.transgender, patient.gender.isEmpty ? '—' : patient.gender),
+          (Icons.wc, patient.gender.isEmpty ? '—' : patient.gender),
         ];
 
         return ListView(
@@ -432,7 +432,6 @@ class _ProfileHeader extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // الاسم يلف ولا يسبب Overflow
                       Text(
                         name,
                         style: theme.textTheme.titleMedium?.copyWith(
@@ -444,7 +443,6 @@ class _ProfileHeader extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
-                      // الأيقونات والقيم: 3 عناصر في السطر تلقائيًا
                       Wrap(
                         spacing: 14,
                         runSpacing: 12,
