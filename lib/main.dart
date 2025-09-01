@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'app_theme.dart';
 import 'app_shell.dart';
 import 'pages/login_page.dart';
 import 'pages/emergency_info_page.dart';
@@ -12,12 +13,7 @@ const String kSupabaseAnonKey =
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await Supabase.initialize(
-    url: kSupabaseUrl,
-    anonKey: kSupabaseAnonKey,
-  );
-
+  await Supabase.initialize(url: kSupabaseUrl, anonKey: kSupabaseAnonKey);
   runApp(const HealthApp());
 }
 
@@ -26,77 +22,60 @@ class HealthApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ThemeData(
-      colorSchemeSeed: const Color(0xFF1976D2),
-      useMaterial3: true,
-      inputDecorationTheme: const InputDecorationTheme(
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-      ),
-    );
-
     return MaterialApp(
       title: 'Health App',
-      theme: theme,
+      theme: AppTheme.light(),
       darkTheme: ThemeData.dark(useMaterial3: true),
 
-      /// نبدأ بصفحة تسجيل الدخول
+      // نبدأ بصفحة تسجيل الدخول
       home: const LoginPage(),
 
-      /// كل التنقّلات الديناميكية (ومرور nationalId) هنا
+      // كل التنقّلات الديناميكية (ومرور nationalId) هنا
       onGenerateRoute: (settings) {
         final name = settings.name ?? '';
 
-// deep link: healthapp://emergency?nid=...
+        // deep link: healthapp://emergency?nid=...
         if (name.startsWith('healthapp://emergency')) {
           final uri = Uri.parse(name);
           final nid = uri.queryParameters['nid'];
-          if (nid != null && nid.isNotEmpty) {
-            return MaterialPageRoute(
-              builder: (_) => EmergencyInfoPage(nationalId: nid),
-            );
-          }
           return MaterialPageRoute(
-            builder: (_) => const Scaffold(
-              body: Center(child: Text('Missing national_id in deep link')),
-            ),
+            builder: (_) => (nid != null && nid.isNotEmpty)
+                ? EmergencyInfoPage(nationalId: nid)
+                : const Scaffold(
+                    body:
+                        Center(child: Text('Missing national_id in deep link')),
+                  ),
           );
         }
 
-// route داخلي: /emergency مع arguments: {'nid': '...'}
+        // route داخلي: /emergency مع arguments: {'nid': '...'}
         if (name == '/emergency') {
           final args = (settings.arguments ?? {}) as Map?;
           final nid = args?['nid']?.toString();
-          if (nid != null && nid.isNotEmpty) {
-            return MaterialPageRoute(
-              builder: (_) => EmergencyInfoPage(nationalId: nid),
-            );
-          }
           return MaterialPageRoute(
-            builder: (_) => const Scaffold(
-              body: Center(child: Text('Missing national_id in /emergency')),
-            ),
+            builder: (_) => (nid != null && nid.isNotEmpty)
+                ? EmergencyInfoPage(nationalId: nid)
+                : const Scaffold(
+                    body: Center(
+                        child: Text('Missing national_id in /emergency')),
+                  ),
           );
         }
 
-// ✅ الصفحة الرئيسية: نتوقع تمرير national id كـ arguments
+        // ✅ الصفحة الرئيسية: نستقبل nationalId
         if (name == '/home') {
           final args = (settings.arguments ?? {}) as Map?;
           final nid = args?['nid']?.toString();
-          if (nid != null && nid.isNotEmpty) {
-            return MaterialPageRoute(
-              builder: (_) => AppShell(nationalId: nid),
-            );
-          }
           return MaterialPageRoute(
-            builder: (_) => const Scaffold(
-              body: Center(child: Text('Missing national_id for /home')),
-            ),
+            builder: (_) => (nid != null && nid.isNotEmpty)
+                ? AppShell(nationalId: nid)
+                : const Scaffold(
+                    body: Center(child: Text('Missing national_id for /home')),
+                  ),
           );
         }
 
-        return null; // استخدم هذا للسماح بالمسارات الافتراضية إن وُجدت
+        return null;
       },
 
       debugShowCheckedModeBanner: false,

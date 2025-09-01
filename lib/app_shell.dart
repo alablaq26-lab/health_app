@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'pages/profile_page.dart';
 import 'pages/services_page.dart';
-import 'pages/settings_page.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.nationalId});
-
-  /// رقم الهوية المُسجّل دخول به
   final String nationalId;
 
   @override
@@ -18,37 +15,25 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-// مرّر الـ nationalId إلى صفحة البروفايل
     final pages = [
       ProfilePage(nationalId: widget.nationalId),
-      const ServicesPage(),
+      ServicesPage(nationalId: widget.nationalId),
     ];
 
     return Scaffold(
       appBar: AppBar(
         title: Text(_index == 0 ? "Home" : "Services"),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () => Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => const SettingsPage())),
-          ),
-        ],
       ),
       body: pages[_index],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
+        onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            label: "Profile",
-          ),
+              icon: Icon(Icons.person_outline), label: "Profile"),
           NavigationDestination(
-            icon: Icon(Icons.grid_view_outlined),
-            label: "Services",
-          ),
+              icon: Icon(Icons.grid_view_outlined), label: "Services"),
         ],
-        onDestinationSelected: (i) => setState(() => _index = i),
       ),
     );
   }

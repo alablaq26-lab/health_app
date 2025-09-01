@@ -15,47 +15,18 @@ import 'visit_details_page.dart';
 import 'private_hospitals_page.dart';
 
 class ServicesPage extends StatelessWidget {
-  const ServicesPage({super.key});
+  const ServicesPage({super.key, required this.nationalId});
+  final String nationalId;
 
   Future<void> _openEmergency(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
-    var nid = prefs.getString('national_id');
-
-    // لو مافيه رقم محفوظ نطلبه من المستخدم ونحفظه
-    if (nid == null || nid.trim().isEmpty) {
-      nid = await showDialog<String>(
-        context: context,
-        builder: (ctx) {
-          final c = TextEditingController();
-          return AlertDialog(
-            title: const Text('Enter National ID'),
-            content: TextField(
-              controller: c,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'National ID',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel')),
-              FilledButton(
-                  onPressed: () => Navigator.pop(ctx, c.text.trim()),
-                  child: const Text('Continue')),
-            ],
-          );
-        },
-      );
-      if (nid == null || nid.isEmpty) return;
-      await prefs.setString('national_id', nid);
-    }
+    await prefs.setString('national_id', nationalId);
 
     if (!context.mounted) return;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => EmergencyInfoPage(nationalId: nid!)),
+      MaterialPageRoute(
+          builder: (_) => EmergencyInfoPage(nationalId: nationalId)),
     );
   }
 
@@ -119,11 +90,13 @@ class ServicesPage extends StatelessWidget {
               _ServiceTile(
                 icon: Icons.biotech_outlined,
                 title: 'Lab Investigations',
-                subtitle: 'Lab investigations results',
+                subtitle: 'Lab investigations grouped by visit',
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (_) => const LabInvestigationsPage()),
+                    builder: (_) =>
+                        LabInvestigationsPage(nationalId: nationalId),
+                  ),
                 ),
               ),
               _ServiceTile(
@@ -166,7 +139,7 @@ class ServicesPage extends StatelessWidget {
                 title: 'Emergency Info',
                 subtitle: 'Critical medical information for emergencies',
                 iconColor: Colors.red,
-                onTap: () => _openEmergency(context), // ← هنا التغيير
+                onTap: () => _openEmergency(context),
               ),
             ]),
           ),
@@ -177,6 +150,8 @@ class ServicesPage extends StatelessWidget {
 }
 
 class _HospitalHeader extends StatelessWidget {
+  static const Color purple = Color(0xFF6F61FF);
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -200,7 +175,8 @@ class _HospitalHeader extends StatelessWidget {
               child: _HospitalBox(
                 label: "Private Hospitals",
                 icon: Icons.apartment,
-                textColor: Colors.blue.shade700,
+                textColor: purple,
+                bgColor: purple.withOpacity(.15),
                 onTap: () {
                   Navigator.push(
                       context,
@@ -214,7 +190,8 @@ class _HospitalHeader extends StatelessWidget {
               child: _HospitalBox(
                 label: "Government Hospitals",
                 icon: Icons.apartment,
-                textColor: Colors.blue.shade700,
+                textColor: purple,
+                bgColor: purple.withOpacity(.15),
                 onTap: () {
                   Navigator.push(
                       context,
@@ -236,19 +213,21 @@ class _HospitalBox extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color textColor;
+  final Color bgColor;
   final VoidCallback? onTap;
 
   const _HospitalBox({
     required this.label,
     required this.icon,
     required this.textColor,
+    required this.bgColor,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.lightBlue.shade100,
+      color: bgColor,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -258,7 +237,7 @@ class _HospitalBox extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: Colors.white, size: 26),
+              Icon(icon, color: textColor, size: 26),
               const SizedBox(height: 6),
               Text(label,
                   textAlign: TextAlign.center,
@@ -313,17 +292,17 @@ class _ServiceTile extends StatelessWidget {
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: ListTile(
         onTap: onTap,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         leading: Container(
-          width: 44,
-          height: 44,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
               color: color.withOpacity(.08),
-              borderRadius: BorderRadius.circular(10)),
+              borderRadius: BorderRadius.circular(12)),
           child: Icon(icon, size: 26, color: color),
         ),
         title: Text(title,

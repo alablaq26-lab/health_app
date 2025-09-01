@@ -1,49 +1,185 @@
 import 'package:flutter/material.dart';
-import '../mock_data.dart';
-import '../models.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class PrivateHospitalsPage extends StatelessWidget {
+class PrivateHospitalsPage extends StatefulWidget {
   const PrivateHospitalsPage({super.key});
+  @override
+  State<PrivateHospitalsPage> createState() => _PrivateHospitalsPageState();
+}
+
+class _PrivateHospitalsPageState extends State<PrivateHospitalsPage> {
+  final _sb = Supabase.instance.client;
+
+  bool _loading = true;
+  String? _error;
+  int? _patientId;
+
+  List<_Hospital> _linked = [];
+  List<_Hospital> _allPrivate = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nid = (prefs.getString('national_id') ?? '').trim();
+      if (nid.isEmpty) {
+        setState(() {
+          _loading = false;
+          _error = 'No saved National ID. Please sign in again.';
+        });
+        return;
+      }
+
+      final p = await _sb
+          .from('create_user_patient')
+          .select('id')
+          .eq('national_id', nid)
+          .limit(1)
+          .maybeSingle();
+
+      if (p == null) {
+        setState(() {
+          _loading = false;
+          _error = 'No patient found for ID: $nid';
+        });
+        return;
+      }
+      _patientId = (p['id'] as num).toInt();
+
+      final pid = _patientId!;
+
+      final priv = await _sb
+          .from('create_user_hospital')
+          .select('hospital_id, hospital_name, hospital_branch, hospital_type')
+          .ilike('hospital_type', 'private%');
+
+      final allPrivate = <_Hospital>[];
+      for (final h in priv as List) {
+        allPrivate.add(_Hospital(
+          id: (h['hospital_id'] as num).toInt(),
+          name: (h['hospital_name'] as String? ?? 'Hospital').trim(),
+          branch: (h['hospital_branch'] as String?)?.trim(),
+          type: (h['hospital_type'] as String?)?.trim(),
+        ));
+      }
+
+      final linkedIds = <int>{};
+
+      // appointments
+      final ap = await _sb
+          .from('create_user_appointment')
+          .select('hospital_id')
+          .eq('patient_id', pid);
+
+      for (final r in ap as List) {
+        final hid = (r['hospital_id'] as num?)?.toInt();
+        if (hid != null) linkedIds.add(hid);
+      }
+
+      // visits
+      final vs = await _sb
+          .from('create_user_visit')
+          .select('hospital_id')
+          .eq('patient_id', pid);
+
+      for (final r in vs as List) {
+        final hid = (r['hospital_id'] as num?)?.toInt();
+        if (hid != null) linkedIds.add(hid);
+      }
+
+      final linked = allPrivate.where((h) => linkedIds.contains(h.id)).toList();
+      final rest = allPrivate.where((h) => !linkedIds.contains(h.id)).toList();
+
+      setState(() {
+        _loading = false;
+        _linked = linked;
+        _allPrivate = rest;
+      });
+    } on PostgrestException catch (e) {
+      setState(() {
+        _loading = false;
+        _error = e.message;
+      });
+    } catch (e) {
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final items = privateHospitalsVisited; // من mock_data.dart
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Private Hospitals')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          if (items.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.black12.withOpacity(.06),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text(
-                "Could not find all of your linked institutes?\n\n"
-                "Please contact the medical records staff to link your patient ID with the civil ID.",
-                style: TextStyle(fontSize: 16),
-              ),
-            )
-          else
-            ...items.map(
-              (Hospital h) => Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  leading: Icon(Icons.local_hospital,
-                      color: Theme.of(context).colorScheme.primary),
-                  title: Text(h.name,
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: Text(h.id),
+      appBar: AppBar(title: const Text("Private Hospitals")),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Padding(
+                      padding: const EdgeInsets.all(16), child: Text(_error!)))
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (_linked.isNotEmpty) ...[
+                      const Text("Linked to your records",
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      for (final h in _linked) _hCard(h),
+                      const SizedBox(height: 16),
+                    ],
+                    const Text("All Private Hospitals",
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    for (final h in _allPrivate) _hCard(h),
+                    const SizedBox(height: 12),
+                    Card(
+                      color: Colors.blue.shade50,
+                      child: const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text(
+                          "Could not find all of your linked institutes?\n\n"
+                          "Please contact the medical records staff to link your patient ID with the civil ID.",
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ),
-        ],
+    );
+  }
+
+  Widget _hCard(_Hospital h) {
+    final tail = [
+      if ((h.branch ?? '').isNotEmpty) h.branch,
+      if ((h.type ?? '').isNotEmpty) h.type,
+    ].join(' • ');
+    final subtitle = tail.isEmpty ? 'ID: ${h.id}' : 'ID: ${h.id}\n$tail';
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.apartment),
+        title:
+            Text(h.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(subtitle),
       ),
     );
   }
+}
+
+class _Hospital {
+  final int id;
+  final String name;
+  final String? branch;
+  final String? type;
+  _Hospital({required this.id, required this.name, this.branch, this.type});
 }
