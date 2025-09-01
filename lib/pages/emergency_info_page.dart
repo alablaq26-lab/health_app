@@ -23,23 +23,36 @@ class EmergencyInfoPage extends StatelessWidget {
     ].join('\n');
   }
 
+  // 🔧 التعديل الوحيد هنا لإزالة overflow
   void _showQrSheet(BuildContext context, String qrData) {
     final w = MediaQuery.of(context).size.width;
-    final size = math.min(280.0, w * 0.72);
+
     showModalBottomSheet(
       context: context,
       useSafeArea: true,
+      isScrollControlled: true, // يسمح للـ sheet بارتفاع أكبر ويمنع القص
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        child: EmergencyQrCard(
-          emergencyLink: qrData,
-          title: 'Emergency QR (Offline)',
-          subtitle: 'Scan to view summary (no internet required)',
-          size: size,
-        ),
+      builder: (ctx) => LayoutBuilder(
+        builder: (ctx, cons) {
+          // احسب حجم QR بما لا يتجاوز المساحة المتاحة داخل الـ sheet
+          // اطرح هامش بسيط لتجنب أي تماس مع الحواف السفلية
+          final safeMax = (cons.maxHeight.isFinite ? cons.maxHeight : 400) - 72;
+          final size = math.max(
+              160.0, // حد أدنى معقول للوضوح
+              math.min(280.0, math.min(w * 0.72, safeMax)).toDouble());
+          // تأكد من أنه double
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            child: EmergencyQrCard(
+              emergencyLink: qrData,
+              title: 'Emergency QR (Offline)',
+              subtitle: 'Scan to view summary (no internet required)',
+              size: size,
+            ),
+          );
+        },
       ),
     );
   }
